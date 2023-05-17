@@ -5,13 +5,13 @@
 #include "definitions.h"
 #include "vnet_tools.h"
 
-#define WIFI_SSID ""
-#define WIFI_PASS ""
+#define WIFI_SSID "St\'s Z Flip"
+#define WIFI_PASS "MeisterFCB"
 
-#define MQTT_ADDR ""
+#define MQTT_ADDR "192.168.212.206"
 #define MQTT_PORT (1883)
-#define MQTT_USER ""
-#define MQTT_PASS ""
+#define MQTT_USER "st"
+#define MQTT_PASS "1234"
 #define MQTT_NAME "esp8266"
 
 WiFiClient client;
@@ -70,11 +70,11 @@ void loop() {
 
         if (idx_buf >= 4) memcpy(tmp_buf, rx_buf + (idx_buf - 4), 4);
 
-        for (auto &x: tmp_buf) {
-            Serial.print(x);
-            Serial.print(' ');
-        }
-        Serial.println();
+//        for (auto &x: tmp_buf) {
+//            Serial.print(x);
+//            Serial.print(' ');
+//        }
+//        Serial.println();
 
         if (memcmp(tmp_buf, start_bits, 4) == 0) {
             found_start = true;
@@ -83,6 +83,12 @@ void loop() {
         }
 
         if (found_start && found_stop) {
+            if (idx_buf > sizeof(Data_t) + 8) {
+                found_start = false;
+                found_stop = false;
+                idx_buf = 0;
+                break;
+            }
             found_start = false;
             found_stop = false;
             idx_buf = 0;
@@ -111,9 +117,14 @@ void process_data() {
     ));
 
     // Reconnect
-    while (!mqtt_connect()) delay(5000);
+    uint8_t retry = 5;
+    while (retry && !mqtt_connect()) {
+        Serial.println("Retrying connecting...");
+        delay(1000);
+        --retry;
+    }
 
-    if (mqtt.publish("", "")) {
+    if (mqtt.publish("Data_t/moisture", String(rx_data.moisture).c_str())) {
         Serial.println("MQTT Published!");
     } else {
         Serial.println("MQTT Failed!");

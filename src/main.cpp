@@ -26,7 +26,7 @@
 //#define USE_GPS
 #define USE_SERIALIZE
 #define LED_STATUS    PA5
-#define SHARP_LED_PIN 14   // Sharp Dust/particle sensor LED Pin
+#define SHARP_LED_PIN PB3   // Sharp Dust/particle sensor LED Pin
 #define SHARP_VO_PIN  A0    // Sharp Dust/particle analog pin
 #define SOIL_PIN      A1
 
@@ -83,11 +83,11 @@ void setup() {
     /**
      * Timer Setup
      */
-    timer_sensor.setOverflow(0'100'000, MICROSEC_FORMAT);
+    timer_sensor.setOverflow(0'500'000, MICROSEC_FORMAT);
     timer_sensor.attachInterrupt(callback_read_Sensors);
     timer_sensor.resume();
 
-    timer_publish.setOverflow(1'500'000, MICROSEC_FORMAT);
+    timer_publish.setOverflow(2'000'000, MICROSEC_FORMAT);
     timer_publish.attachInterrupt(callback_publish_Data);
     timer_publish.resume();
 
@@ -101,6 +101,7 @@ void setup() {
             bme280.begin(0x76, &Wire),
             ccs811.begin(0x5a, &Wire)
     };
+    gp2y.begin();
 
     Serial.println("=== BEGIN ===");
 }
@@ -123,10 +124,11 @@ void loop() {
 #endif
 
     dat.dust_ug = gp2y.getDustDensity();
-    delay(10);
+    delay(500);
 }
 
 void callback_publish_Data() {
+    ++dat.counter;
     Serial.println("Data Transmitted: ");
     Serial.println(build_string(
             dat.id,
@@ -164,7 +166,7 @@ void callback_publish_Data() {
 void callback_read_Sensors() {
     dat.pht = read_PHT();
 //    dat.dust_ug = gp2y.getDustDensity();
-    dat.moisture = DMAP(analogRead(SOIL_PIN), 0, 1 << 12, 0, 100);
+    dat.moisture = DMAP((int32_t) analogRead(SOIL_PIN), 0, 1023, 100, 0);
 
     dat.risk = get_risk();
     dat.is_fire = is_fire();
