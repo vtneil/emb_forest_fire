@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <string>
 #include <ESP8266WiFi.h>
 #include <SoftwareSerial.h>
 #include <PubSubClient.h>
@@ -8,7 +9,7 @@
 #define WIFI_SSID "St\'s Z Flip"
 #define WIFI_PASS "MeisterFCB"
 
-#define MQTT_ADDR "192.168.212.206"
+#define MQTT_ADDR "node.vt.in.th"
 #define MQTT_PORT (1883)
 #define MQTT_USER "st"
 #define MQTT_PASS "1234"
@@ -49,6 +50,7 @@ void setup() {
     } else {
         Serial.println("WiFi Failed!");
     }
+
     mqtt.setServer(MQTT_ADDR, MQTT_PORT);
 
     for (uint8_t i = 0; i < 10; ++i) {
@@ -63,18 +65,16 @@ void setup() {
 void loop() {
     static size_t idx_buf = 0;
 
+    SerialComm.write((uint8_t) 0x1);
+    while (!SerialComm.available());
+    delay(50);
+
     while (SerialComm.available()) {
         uint8_t b = SerialComm.read();
 
         rx_buf[idx_buf] = b;
 
         if (idx_buf >= 4) memcpy(tmp_buf, rx_buf + (idx_buf - 4), 4);
-
-//        for (auto &x: tmp_buf) {
-//            Serial.print(x);
-//            Serial.print(' ');
-//        }
-//        Serial.println();
 
         if (memcmp(tmp_buf, start_bits, 4) == 0) {
             found_start = true;
@@ -99,6 +99,10 @@ void loop() {
 
         ++idx_buf;
     }
+
+    found_start = false;
+    found_stop = false;
+    idx_buf = 0;
 }
 
 void process_data() {
@@ -124,13 +128,15 @@ void process_data() {
         --retry;
     }
 
-    if (mqtt.publish("Data_t/moisture", String(rx_data.moisture).c_str())) {
-        Serial.println("MQTT Published!");
-    } else {
-        Serial.println("MQTT Failed!");
-    }
-
-    Serial.println();
+    mqtt.publish("Data_t/id", std::to_string(rx_data.id).c_str());
+    mqtt.publish("Data_t/counter", std::to_string(rx_data.counter).c_str());
+    mqtt.publish("Data_t/moisture", std::to_string(rx_data.moisture).c_str());
+    mqtt.publish("Data_t/dust_ug", std::to_string(rx_data.dust_ug).c_str());
+    mqtt.publish("Data_t/risk", std::to_string(rx_data.risk).c_str());
+    mqtt.publish("Data_t/is_fire", std::to_string(rx_data.is_fire).c_str());
+    mqtt.publish("PHT_t/pressure", std::to_string(rx_data.pht.pressure).c_str());
+    mqtt.publish("PHT_t/humidity", std::to_string(rx_data.pht.humidity).c_str());
+    mqtt.publish("PHT_t/temperature", std::to_string(rx_data.pht.temperature).c_str());
 }
 
 bool mqtt_connect() {

@@ -87,10 +87,6 @@ void setup() {
     timer_sensor.attachInterrupt(callback_read_Sensors);
     timer_sensor.resume();
 
-    timer_publish.setOverflow(2'000'000, MICROSEC_FORMAT);
-    timer_publish.attachInterrupt(callback_publish_Data);
-    timer_publish.resume();
-
     /**
      * Begin Devices
      */
@@ -122,6 +118,13 @@ void loop() {
         };
     }
 #endif
+
+    if (SerialComm.available()) {
+        delay(50);
+        while (SerialComm.available()) SerialComm.read();
+        callback_publish_Data();
+        delay(50);
+    }
 
     dat.dust_ug = gp2y.getDustDensity();
     delay(500);
