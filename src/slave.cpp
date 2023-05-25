@@ -6,8 +6,8 @@
 #include "definitions.h"
 #include "vnet_tools.h"
 
-#define WIFI_SSID "St\'s Z Flip"
-#define WIFI_PASS "MeisterFCB"
+#define WIFI_SSID "vt"
+#define WIFI_PASS "11111111"
 
 #define MQTT_ADDR "node.vt.in.th"
 #define MQTT_PORT (1883)
@@ -36,11 +36,23 @@ void setup() {
     SerialComm.begin(9600, SWSERIAL_8N1, D3, D2, false);
 
     WiFi.mode(WIFI_STA);
+
+    uint8_t numberOfNetworks = WiFi.scanNetworks();
+
+    for (uint8_t i = 0; i < numberOfNetworks; i++) {
+        Serial.print("Network name: ");
+        Serial.println(WiFi.SSID(i));
+        Serial.print("Signal strength: ");
+        Serial.println(WiFi.RSSI(i));
+        Serial.println("-----------------------");
+
+    }
+
     WiFi.begin(WIFI_SSID, WIFI_PASS);
 
     uint8_t retry = 20;
     while (retry && WiFi.status() != WL_CONNECTED) {
-        delay(500);
+        delay(1500);
         Serial.print(".");
         --retry;
     }
@@ -66,42 +78,26 @@ void loop() {
     static size_t idx_buf = 0;
 
     SerialComm.write((uint8_t) 0x1);
-    while (!SerialComm.available());
+    Serial.println("Request Sent!");
+    uint32_t tim = millis();
+    while (!SerialComm.available()) {
+        if (millis() - tim > 2000) {
+            SerialComm.write((uint8_t) 0x1);
+            Serial.println("Request Resent!");
+            tim = millis();
+        }
+    }
     delay(50);
+    Serial.println("Request Recv!");
 
     while (SerialComm.available()) {
         uint8_t b = SerialComm.read();
-
-        rx_buf[idx_buf] = b;
-
-        if (idx_buf >= 4) memcpy(tmp_buf, rx_buf + (idx_buf - 4), 4);
-
-        if (memcmp(tmp_buf, start_bits, 4) == 0) {
-            found_start = true;
-        } else if (memcmp(tmp_buf, stop_bits, 4) == 0) {
-            found_stop = true;
-        }
-
-        if (found_start && found_stop) {
-            if (idx_buf > sizeof(Data_t) + 8) {
-                found_start = false;
-                found_stop = false;
-                idx_buf = 0;
-                break;
-            }
-            found_start = false;
-            found_stop = false;
-            idx_buf = 0;
-
-            memcpy(&rx_data, rx_buf + 4, sizeof(rx_data));
-            process_data();
-        }
-
-        ++idx_buf;
+        rx_buf[idx_buf++] = b;
     }
 
-    found_start = false;
-    found_stop = false;
+    memcpy(&rx_data, rx_buf + 4, sizeof(rx_data));
+
+    process_data();
     idx_buf = 0;
 }
 

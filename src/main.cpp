@@ -49,7 +49,7 @@
  * Global variables
  */
 HardwareTimer timer_sensor(TIM2);
-HardwareTimer timer_publish(TIM3);
+HardwareTimer timer_print(TIM3);
 
 GP2YDustSensor gp2y(GP2YDustSensorType::GP2Y1010AU0F, SHARP_LED_PIN, SHARP_VO_PIN);
 Adafruit_BME280 bme280;
@@ -67,7 +67,9 @@ extern uint8_t get_risk();
 
 extern uint8_t is_fire();
 
-extern void callback_publish_Data();
+extern void publish_Data();
+
+extern void callback_print_Data();
 
 extern void callback_read_Sensors();
 
@@ -83,9 +85,13 @@ void setup() {
     /**
      * Timer Setup
      */
-    timer_sensor.setOverflow(0'500'000, MICROSEC_FORMAT);
+    timer_sensor.setOverflow(0'250'000, MICROSEC_FORMAT);
     timer_sensor.attachInterrupt(callback_read_Sensors);
     timer_sensor.resume();
+
+    timer_print.setOverflow(1'000'000, MICROSEC_FORMAT);
+    timer_print.attachInterrupt(callback_print_Data);
+    timer_print.resume();
 
     /**
      * Begin Devices
@@ -122,7 +128,7 @@ void loop() {
     if (SerialComm.available()) {
         delay(50);
         while (SerialComm.available()) SerialComm.read();
-        callback_publish_Data();
+        publish_Data();
         delay(50);
     }
 
@@ -130,9 +136,8 @@ void loop() {
     delay(500);
 }
 
-void callback_publish_Data() {
-    ++dat.counter;
-    Serial.println("Data Transmitted: ");
+void publish_Data() {
+    Serial.println("Data Transmitted!: ");
     Serial.println(build_string(
             dat.id,
             dat.counter,
@@ -166,6 +171,22 @@ void callback_publish_Data() {
     digitalToggle(LED_STATUS);
 }
 
+void callback_print_Data() {
+    Serial.println("Data Now: ");
+    Serial.println(build_string(
+            dat.id,
+            dat.counter,
+            dat.pht.pressure,
+            dat.pht.humidity,
+            dat.pht.temperature,
+            dat.moisture,
+            dat.dust_ug,
+            dat.risk,
+            dat.is_fire
+    ));
+    Serial.println();
+}
+
 void callback_read_Sensors() {
     dat.pht = read_PHT();
 //    dat.dust_ug = gp2y.getDustDensity();
@@ -173,14 +194,15 @@ void callback_read_Sensors() {
 
     dat.risk = get_risk();
     dat.is_fire = is_fire();
+    ++dat.counter;
 }
 
 PHT_t read_PHT() {
     if (!status.bme280) return {};
     return {
-            bme280.readTemperature(),
+            bme280.readPressure() / 100.f,
             bme280.readHumidity(),
-            bme280.readPressure() / 100.f
+            bme280.readTemperature()
     };
 }
 
@@ -188,18 +210,18 @@ uint8_t get_risk() {
     float risk_factors = 0;
 
     // Temperature too high
-    float temperature = constrain(dat.pht.temperature, 15.f, 85.f);
-    risk_factors += map_val(temperature, 15.f, 85.f, 0.f, 100.f);
+    float temperature = constrain(dat.pht.temperature, 30.f, 85.f);
+    risk_factors += 1.f * map_val(temperature, 30.f, 85.f, 0.f, 100.f);
 
     // Humidity too low
-    risk_factors += map_val(dat.pht.humidity, 0.f, 100.f, 100.f, 0.f);
+    risk_factors += 1.f * map_val(dat.pht.humidity, 0.f, 100.f, 100.f, 0.f);
 
     // Soil moisture too low
-    risk_factors += (float) map_val(dat.moisture, (uint32_t) 0, (uint32_t) 100, (uint32_t) 100, (uint32_t) 0);
+    risk_factors += 1.f * (float) map_val((int32_t) dat.moisture, 0l, 100l, 100l, 0l);
 
     return (uint8_t) (risk_factors / 3);
 }
 
 uint8_t is_fire() {
-    return dat.dust_ug > 10 || dat.risk > 50;
+    return dat.dust_ug > 250 || dat.risk > 75;
 }
